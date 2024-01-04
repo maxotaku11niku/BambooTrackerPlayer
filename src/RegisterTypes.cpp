@@ -5,6 +5,7 @@
 
 #include "RegisterTypes.h"
 #include "BambooTrackerPlayer.h"
+#include "BambooTrackerModule.h"
 #include <gdextension_interface.h>
 #include <godot_cpp/core/defs.hpp>
 #include <godot_cpp/godot.hpp>
@@ -18,6 +19,7 @@ void InitialiseModule(ModuleInitializationLevel p_level)
         return;
     }
 
+    ClassDB::register_class<BambooTrackerModule>();
     ClassDB::register_class<BambooTrackerPlayer>();
 }
 
