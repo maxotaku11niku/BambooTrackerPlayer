@@ -7,6 +7,8 @@
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/variant/packed_vector2_array.hpp>
 #include <godot_cpp/variant/vector2.hpp>
+#include <vector>
+#include <iostream>
 
 using namespace godot;
 
@@ -15,6 +17,13 @@ void BambooTrackerPlayer::_bind_methods()
     ClassDB::bind_method(D_METHOD("getModule"), &BambooTrackerPlayer::getModule);
     ClassDB::bind_method(D_METHOD("setModule", "mod"), &BambooTrackerPlayer::setModule);
     ClassDB::add_property("BambooTrackerPlayer", PropertyInfo(Variant::OBJECT, "module", PropertyHint::PROPERTY_HINT_RESOURCE_TYPE, "BambooTrackerModule"), "setModule", "getModule");
+    ClassDB::bind_method(D_METHOD("getSongNumber"), &BambooTrackerPlayer::getSongNumber);
+    ClassDB::bind_method(D_METHOD("setSongNumber", "num"), &BambooTrackerPlayer::setSongNumber);
+    ClassDB::add_property("BambooTrackerPlayer", PropertyInfo(Variant::INT, "currentSongNumber"), "setSongNumber", "getSongNumber");
+    ClassDB::bind_method(D_METHOD("PlayNewModule"), &BambooTrackerPlayer::PlayNewModule);
+    ClassDB::bind_method(D_METHOD("PlaySong", "songNum", "forceRestart"), &BambooTrackerPlayer::PlaySong, DEFVAL(false));
+    ClassDB::bind_method(D_METHOD("PlaySongFromName", "songName", "forceRestart"), &BambooTrackerPlayer::PlaySongFromName, DEFVAL(false));
+    ClassDB::bind_method(D_METHOD("StopSong"), &BambooTrackerPlayer::StopSong);
 }
 
 BambooTrackerPlayer::BambooTrackerPlayer()
@@ -24,6 +33,17 @@ BambooTrackerPlayer::BambooTrackerPlayer()
     outStream->set_mix_rate(55466);
     outStream->set_buffer_length(0.05);
     set_stream(outStream);
+    //Set up YM2608 emulator
+    isSongPlaying = false;
+    chipController = std::make_shared<OPNAController>(chip::OpnaEmulator::Ymfm, 7987200, 55466, 2048, chip::ResamplerType::BlipBuf);
+    instManager = std::make_shared<InstrumentsManager>(false);
+    tickCounter = std::make_shared<TickCounter>();
+    currentModule = std::make_shared<Module>();
+    currentSongNum = -1;
+    sampleBuffer = new int16_t[16384];
+    outSampleBuffer = PackedVector2Array();
+    outSampleBuffer.resize(4096);
+    outSampleBuffer.fill(Vector2(0.0, 0.0));
 }
 
 BambooTrackerPlayer::~BambooTrackerPlayer()
@@ -33,17 +53,34 @@ BambooTrackerPlayer::~BambooTrackerPlayer()
 
 void BambooTrackerPlayer::_process(double delta)
 {
-
+    if (!isSongPlaying) return;
+    while (timeToNextTick <= 0.0)
+    {
+        double fltNumSamp = numSampRemainder + samplesPerTick;
+        int64_t numSamples = (int64_t)(fltNumSamp);
+        if (numSamples > playback->get_frames_available())
+        {
+            break;
+        }
+        numSampRemainder = fltNumSamp - (double)(numSamples);
+        ticksToNextStep = pbManager->streamCountUp();
+        bool success = chipController->getStreamSamples(sampleBuffer, numSamples);
+        outSampleBuffer.resize(numSamples);
+        for (int i = 0; i < numSamples; i++)
+        {
+            Vector2 samp = Vector2(sampleBuffer[i * 2], sampleBuffer[i * 2 + 1]);
+            samp /= 32768.0;
+            outSampleBuffer[i] = samp;
+        }
+        playback->push_buffer(outSampleBuffer);
+        timeToNextTick += secondsPerTick;
+    }
+    timeToNextTick -= delta;
 }
 
 void BambooTrackerPlayer::_ready()
 {
-    play();
-    playback = get_stream_playback();
-    PackedVector2Array emptyPush = PackedVector2Array();
-    emptyPush.resize(256);
-    emptyPush.fill(Vector2(0.0, 0.0));
-    playback->push_buffer(emptyPush);
+    return;
 }
 
 void BambooTrackerPlayer::setModule(const Ref<BambooTrackerModule> &mod)
@@ -56,7 +93,90 @@ Ref<BambooTrackerModule> BambooTrackerPlayer::getModule() const
     return module;
 }
 
-void BambooTrackerPlayer::PlaySong(int64_t songNum)
+void BambooTrackerPlayer::setSongNumber(int64_t num)
 {
+    return; //You must set the song number with a method call
+}
 
+int64_t BambooTrackerPlayer::getSongNumber() const
+{
+    return currentSongNum;
+}
+
+void BambooTrackerPlayer::PlayNewModule()
+{
+    io::BinaryContainer container;
+    std::vector<uint8_t> byteVector;
+    PackedByteArray modDat = module->getModuleData();
+    for (int i = 0; i < modDat.size(); i++)
+    {
+        byteVector.push_back(modDat[i]);
+    }
+    std::move(std::begin(byteVector), std::end(byteVector), std::back_inserter(container));
+    io::ModuleIO::getInstance().loadModule(container, currentModule, instManager);
+    tickCounter->setInterruptRate(currentModule->getTickFrequency());
+    secondsPerTick = 1.0/((double)currentModule->getTickFrequency());
+    samplesPerTick = 55466.0 * secondsPerTick;
+    if (pbManager == NULL) pbManager = std::unique_ptr<PlaybackManager>(new PlaybackManager(chipController, instManager, tickCounter, currentModule, false));
+    chipController->setMasterVolume(100);
+    chipController->setMasterVolumeFM(currentModule->getCustomMixerFMLevel());
+    chipController->setMasterVolumeSSG(currentModule->getCustomMixerSSGLevel());
+    chipController->clearSamplesADPCM();
+    std::vector<int> idcs = instManager->getSampleADPCMValidIndices();
+    for (auto sampNum : idcs)
+    {
+        size_t startAddr, stopAddr;
+        if (chipController->storeSampleADPCM(instManager->getSampleADPCMRawSample(sampNum), startAddr, stopAddr)) {
+            instManager->setSampleADPCMStartAddress(sampNum, startAddr);
+            instManager->setSampleADPCMStopAddress(sampNum, stopAddr);
+        }
+    }
+}
+
+void BambooTrackerPlayer::PlaySong(int64_t songNum, bool forceRestart)
+{
+    if (songNum >= module->getNumberOfSongs() || songNum < 0)
+    {
+        return; //Do not attempt to play an out-of-range song
+    }
+    if (!forceRestart && songNum == currentSongNum)
+    {
+        return; //Continue if the same song is reselected, unless the programmer wishes to force a restart
+    }
+    auto& song = currentModule->getSong(songNum);
+    pbManager->setSong(currentModule, songNum);
+    currentSongNum = songNum;
+    chipController->reset();
+    chipController->setMode(song.getStyle().type);
+    tickCounter->resetCount();
+    tickCounter->setTempo(song.getTempo());
+    tickCounter->setSpeed(song.getSpeed());
+    tickCounter->setGroove(currentModule->getGroove(song.getGroove()));
+    tickCounter->setGrooveState(song.isUsedTempo() ? GrooveState::Invalid : GrooveState::ValidByGlobal);
+    currentSong = &song;
+    currentSongType = currentSong->getStyle().type;
+    if (currentSongType == SongType::Standard) chNum = 15;
+    else if (currentSongType == SongType::FM3chExpanded) chNum = 18;
+    pbManager->startPlayFromStart();
+    isSongPlaying = true;
+    timeToNextTick = -0.05;
+    numSampRemainder = 0.0;
+    play();
+    playback = get_stream_playback();
+}
+
+void BambooTrackerPlayer::PlaySongFromName(String songName, bool forceRestart)
+{
+    if (module->songNameMap.has(songName))
+    {
+        PlaySong(module->songNameMap[songName], forceRestart); //Only attempt to play a song if it actually exists in the module
+    }
+}
+
+void BambooTrackerPlayer::StopSong()
+{
+    pbManager->stopPlaySong();
+    isSongPlaying = false;
+    currentSongNum = -1;
+    stop();
 }
