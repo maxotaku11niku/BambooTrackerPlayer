@@ -56,12 +56,15 @@ public:
 	size_t getOrderSize() const;
 	bool canAddNewOrder() const;
 	Pattern& getPattern(int num);
+	Pattern& getPatternWithFallback(int num, int patSize); // MH - Added to facilitate the initial adding of patterns to in-memory module data, without slowing down normal accesses
 	Pattern& getPatternFromOrderNumber(int num);
 	int searchFirstUneditedUnusedPattern() const;
 	int clonePattern(int num);
 	std::vector<int> getEditedPatternIndices() const;
 	std::set<int> getRegisteredInstruments() const;
 
+	void prelimExpandPatternList(int newSize, int patSize); // MH - Added to facilitate the initial adding of patterns to in-memory module data, avoids a crash due to out-of-bounds access
+	void shrinkPatternList(); // MH - Added to facilitate the initial adding of patterns to in-memory module data, cleans up any unused patterns
 	void registerPatternToOrder(int order, int pattern);
 	void insertOrderBelow(int order);
 	void deleteOrder(int order);

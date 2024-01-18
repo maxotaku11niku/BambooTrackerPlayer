@@ -30,7 +30,7 @@
 
 namespace
 {
-constexpr int PATTERN_SIZE = 256;
+constexpr int PATTERN_SIZE = 1; // MH - Modified from 256 to reduce memory usage; only as much memory as is needed should be allocated, and we only require read-only access to modules anyway
 constexpr int MAX_ORDER_SIZE = 256;
 }
 
@@ -80,6 +80,24 @@ Pattern& Track::getPattern(int num)
 	return patterns_.at(static_cast<size_t>(num));
 }
 
+// MH - Added to facilitate the initial adding of patterns to in-memory module data, without slowing down normal accesses
+Pattern& Track::getPatternWithFallback(int num, int patSize)
+{
+	if (num >= patterns_.size()) //Pattern out of range
+	{
+		size_t oldSize = patterns_.size();
+		patterns_.reserve(num+1);
+		for (int i = oldSize; i < num+1; ++i)
+		{
+			patterns_.emplace_back(i, patSize);
+		}
+	}
+	return patterns_.at(static_cast<size_t>(num));
+	/* Note - it is the responsibility of the USER to not leave any gaps in pattern numbers, as this will cause overallocation.
+	 * Later, I may devise some system to account for situations like that.
+	 */
+}
+
 Pattern& Track::getPatternFromOrderNumber(int num)
 {
 	return getPattern(order_.at(static_cast<size_t>(num)));
@@ -116,6 +134,38 @@ std::set<int> Track::getRegisteredInstruments() const
 		std::copy(insts.cbegin(), insts.cend(), std::inserter(set, set.end()));
 	}
 	return set;
+}
+
+// MH - Added to facilitate the initial adding of patterns to in-memory module data, avoids a crash due to out-of-bounds access
+void Track::prelimExpandPatternList(int newSize, int patSize)
+{
+	if (newSize > patterns_.size())
+	{
+		size_t oldSize = patterns_.size();
+		patterns_.reserve(newSize);
+		for (int i = oldSize; i < newSize; ++i)
+		{
+			patterns_.emplace_back(i, patSize);
+		}
+	}
+	/* Note - it is the responsibility of the USER to not leave any gaps in pattern numbers, as this will cause overallocation.
+	 * Later, I may devise some system to account for situations like that.
+	 */
+}
+
+// MH - Added to facilitate the initial adding of patterns to in-memory module data, cleans up any unused patterns
+void Track::shrinkPatternList()
+{
+	int maxPatternNumber = 0;
+	for (int i = 0; i < order_.size(); i++)
+	{
+		if (order_.at(i) > maxPatternNumber)
+		{
+			maxPatternNumber = order_.at(i);
+		}
+	}
+	patterns_.erase(patterns_.begin() + maxPatternNumber + 1, patterns_.end());
+	patterns_.shrink_to_fit();
 }
 
 void Track::registerPatternToOrder(int order, int pattern)
