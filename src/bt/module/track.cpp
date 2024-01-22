@@ -93,7 +93,7 @@ Pattern& Track::getPatternWithFallback(int num, int patSize)
 		}
 	}
 	return patterns_.at(static_cast<size_t>(num));
-	/* Note - it is the responsibility of the USER to not leave any gaps in pattern numbers, as this will cause overallocation.
+	/* Note from MH - it is the responsibility of the USER to not leave any gaps in pattern numbers, as this will cause overallocation.
 	 * Later, I may devise some system to account for situations like that.
 	 */
 }
@@ -148,7 +148,7 @@ void Track::prelimExpandPatternList(int newSize, int patSize)
 			patterns_.emplace_back(i, patSize);
 		}
 	}
-	/* Note - it is the responsibility of the USER to not leave any gaps in pattern numbers, as this will cause overallocation.
+	/* Note from MH - it is the responsibility of the USER to not leave any gaps in pattern numbers, as this will cause overallocation.
 	 * Later, I may devise some system to account for situations like that.
 	 */
 }

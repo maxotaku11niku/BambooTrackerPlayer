@@ -1671,7 +1671,7 @@ size_t loadSongSection(std::weak_ptr<Module> mod, const BinaryContainer& ctr,
 			size_t trackEnd = scsr + trackOfs;
 			size_t tcsr = scsr + 4;
 			uint8_t odrLen = ctr.readUint8(tcsr++) + 1;
-			track.prelimExpandPatternList(odrLen, ptnSize);
+			track.prelimExpandPatternList(odrLen, ptnSize); // MH - Added to facilitate the initial adding of patterns to in-memory module data, avoids a crash due to out-of-bounds access
 			for (uint8_t oi = 0; oi < odrLen; ++oi) {
 				if (!oi)
 					track.registerPatternToOrder(oi, ctr.readUint8(tcsr++));
@@ -1770,7 +1770,7 @@ size_t loadSongSection(std::weak_ptr<Module> mod, const BinaryContainer& ctr,
 			}
 
 			scsr += trackOfs;
-			track.shrinkPatternList();
+			track.shrinkPatternList(); // MH - Added to facilitate the initial adding of patterns to in-memory module data, cleans up any unused patterns
 		}
 
 		if (version < Version::toBCD(1, 4, 0)) {	// ADPCM track

@@ -9,7 +9,7 @@
 ## Requirements
 
 - Godot 4.2 or higher
-- Windows, Linux or Android for prebuilt binaries (coming soon), build this repository yourself to generate a macOS version.
+- Windows, Linux or Android for prebuilt binaries, build this repository yourself to generate a macOS version.
 
 ## Basic usage
 

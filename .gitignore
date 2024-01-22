@@ -1,4 +1,6 @@
 .kdev4/
 bin/
+releases/
 .sconsign.dblite
 *.os
+build.sh
