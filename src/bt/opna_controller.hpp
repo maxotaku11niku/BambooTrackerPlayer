@@ -53,6 +53,9 @@ public:
 	// Direct register set
 	void sendRegister(int address, int value);
 
+	//MH - Included this function to allow BambooTrackerPlayer to read OPNA registers for fun
+	int getRegisterDebug(int address);
+
 	// DRAM
 	size_t getDRAMSize() const;
 

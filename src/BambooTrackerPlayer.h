@@ -36,6 +36,30 @@
 #include "bt/io/btm_io.hpp"
 #include "bt/module/module.hpp"
 
+/* Conventions used by BambooTrackerPlayer for channel numbers
+ * FM1-6: 0-5
+ * SSG1-3: 6-8
+ * Rhythm channels: 9-14 (bass, snare, cymbal, hihat, tom, rim in that order)
+ * ADPCM: 15
+ * FM3op1-3: 16-18 (FM3op4 is 2)
+ *
+ * Internal Bamboo Tracker conventions:
+ * Normal: Matches BambooTrackerPlayer convention
+ * FM3chExpanded:
+ *   FM1-2: 0-1
+ *   FM3op1-4: 2-5
+ *   FM4-6: 6-8
+ *   SSG1-3: 9-11
+ *   Rhythm channels: 12-17
+ *   ADPCM: 18
+ */
+
+/* Conventions used by BambooTrackerPlayer for note numbers
+ * -1: No note playing
+ * 0-95: C0-B7, note not retriggered
+ * 128-223: C0-B7, but note was retriggered
+ */
+
 namespace godot
 {
     class BambooTrackerPlayer : public AudioStreamPlayer
@@ -48,6 +72,8 @@ namespace godot
         Ref<AudioStreamGeneratorPlayback> playback;
         bool isSongPlaying;
         int64_t currentSongNum;
+        int orderNum;
+        int stepNum;
         int ticksToNextStep;
         double timeToNextTick;
         double numSampRemainder;
@@ -63,6 +89,9 @@ namespace godot
         Song* currentSong;
         SongType currentSongType;
         int chNum;
+        int currentNotes[19];
+        bool retriggeredNotes[19];
+        Step* currentSteps[19];
 
     protected:
         static void _bind_methods();
@@ -78,6 +107,10 @@ namespace godot
         Ref<BambooTrackerModule> getModule() const;
         void setSongNumber(int64_t num);
         int64_t getSongNumber() const;
+        void setOrderNumber(int64_t num);
+        int64_t getOrderNumber() const;
+        void setStepNumber(int64_t num);
+        int64_t getStepNumber() const;
 
         //Call this after setting the module (something which you probably only need to do once) and before playing any songs
         void PlayNewModule();
@@ -86,5 +119,12 @@ namespace godot
         //More convenient if you like to reorder the songs, you should probably use this (and make the song names in the module symbolic and not their display names)
         void PlaySongFromName(String songName, bool forceRestart = false);
         void StopSong();
+        //Get the value of the given OPNA register, returning 0 for any invalid registers
+        int64_t GetRegister(int64_t addr);
+        //Gets the currently playing note on an OPNA channel
+        int64_t GetNote(int64_t channel);
+
+    private:
+        int GetRetriggerMask(int curNote, int prevNote, int stepNote, int index);
     };
 }

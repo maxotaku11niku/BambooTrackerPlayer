@@ -537,6 +537,8 @@ public:
 	uint8_t read_status_hi();
 	uint8_t read_data_hi();
 	uint8_t read(uint32_t offset);
+	//MH - Included this function to allow BambooTrackerPlayer to read OPNA registers for fun
+	uint8_t read_debug(uint32_t offset);
 
 	// write access
 	void write_address(uint8_t data);

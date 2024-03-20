@@ -1146,6 +1146,17 @@ uint8_t ym2608::read(uint32_t offset)
 	return result;
 }
 
+//MH - Included this function to allow BambooTrackerPlayer to read OPNA registers for fun
+uint8_t ym2608::read_debug(uint32_t offset)
+{
+	if (offset < 0x10) return m_ssg.regs().read(offset); //SSG
+	else if (offset < 0x20) return m_adpcm_a.regs().read(offset - 0x10); //Rhythm
+	else if (offset < 0x100) return m_fm.regs().read((uint16_t)offset); //FM, lower 3 channels
+	else if (offset < 0x110) return m_adpcm_b.regs().read(offset - 0x100); //ADPCM
+	else if (offset < 0x200) return m_fm.regs().read((uint16_t)offset); //FM, upper 3 channels
+	else return 0; //invalid
+}
+
 
 //-------------------------------------------------
 //  write_address - handle a write to the address

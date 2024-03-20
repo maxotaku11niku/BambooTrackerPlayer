@@ -39,10 +39,18 @@ void BambooTrackerPlayer::_bind_methods()
     ClassDB::bind_method(D_METHOD("getSongNumber"), &BambooTrackerPlayer::getSongNumber);
     ClassDB::bind_method(D_METHOD("setSongNumber", "num"), &BambooTrackerPlayer::setSongNumber);
     ClassDB::add_property("BambooTrackerPlayer", PropertyInfo(Variant::INT, "currentSongNumber"), "setSongNumber", "getSongNumber");
+    ClassDB::bind_method(D_METHOD("getOrderNumber"), &BambooTrackerPlayer::getOrderNumber);
+    ClassDB::bind_method(D_METHOD("setOrderNumber", "num"), &BambooTrackerPlayer::setOrderNumber);
+    ClassDB::add_property("BambooTrackerPlayer", PropertyInfo(Variant::INT, "currentOrderNumber"), "setOrderNumber", "getOrderNumber");
+    ClassDB::bind_method(D_METHOD("getStepNumber"), &BambooTrackerPlayer::getStepNumber);
+    ClassDB::bind_method(D_METHOD("setStepNumber", "num"), &BambooTrackerPlayer::setStepNumber);
+    ClassDB::add_property("BambooTrackerPlayer", PropertyInfo(Variant::INT, "currentStepNumber"), "setStepNumber", "getStepNumber");
     ClassDB::bind_method(D_METHOD("PlayNewModule"), &BambooTrackerPlayer::PlayNewModule);
     ClassDB::bind_method(D_METHOD("PlaySong", "songNum", "forceRestart"), &BambooTrackerPlayer::PlaySong, DEFVAL(false));
     ClassDB::bind_method(D_METHOD("PlaySongFromName", "songName", "forceRestart"), &BambooTrackerPlayer::PlaySongFromName, DEFVAL(false));
     ClassDB::bind_method(D_METHOD("StopSong"), &BambooTrackerPlayer::StopSong);
+    ClassDB::bind_method(D_METHOD("GetRegister", "addr"), &BambooTrackerPlayer::GetRegister);
+    ClassDB::bind_method(D_METHOD("GetNote", "channel"), &BambooTrackerPlayer::GetNote);
 }
 
 BambooTrackerPlayer::BambooTrackerPlayer()
@@ -63,11 +71,29 @@ BambooTrackerPlayer::BambooTrackerPlayer()
     outSampleBuffer = PackedVector2Array();
     outSampleBuffer.resize(4096);
     outSampleBuffer.fill(Vector2(0.0, 0.0));
+    for (int i = 0; i < 19; i++)
+    {
+        currentNotes[i] = -1;
+    }
 }
 
 BambooTrackerPlayer::~BambooTrackerPlayer()
 {
 
+}
+
+int BambooTrackerPlayer::GetRetriggerMask(int curNote, int prevNote, int stepNote, int index)
+{
+    int retrigmask = 0;
+    if (stepNote != Step::NoteValue::NOTE_NONE && stepNote != Step::NoteValue::NOTE_KEY_OFF && stepNote != Step::NoteValue::NOTE_KEY_CUT)
+    {
+        if (!retriggeredNotes[index])
+        {
+            if (curNote == prevNote) retrigmask = 0x80;
+            retriggeredNotes[index] = true;
+        }
+    }
+    return retrigmask;
 }
 
 void BambooTrackerPlayer::_process(double delta)
@@ -83,6 +109,13 @@ void BambooTrackerPlayer::_process(double delta)
         }
         numSampRemainder = fltNumSamp - (double)(numSamples);
         ticksToNextStep = pbManager->streamCountUp();
+        if (ticksToNextStep == 0)
+        {
+            for (int i = 0; i < chNum; i++)
+            {
+                retriggeredNotes[i] = false;
+            }
+        }
         bool success = chipController->getStreamSamples(sampleBuffer, numSamples);
         outSampleBuffer.resize(numSamples);
         for (int i = 0; i < numSamples; i++)
@@ -93,8 +126,142 @@ void BambooTrackerPlayer::_process(double delta)
         }
         playback->push_buffer(outSampleBuffer);
         timeToNextTick += secondsPerTick;
+        orderNum = pbManager->getPlayingOrderNumber();
+        stepNum = pbManager->getPlayingStepNumber();
+        if (chNum == 16)
+        {
+            for (int i = 0; i < 16; i++)
+            {
+                currentSteps[i] = &(currentSong->getTrack(i).getPatternFromOrderNumber(orderNum).getStep(stepNum));
+            }
+        }
+        else if (chNum == 19)
+        {
+            for (int i = 0; i < 2; i++) //FM1-2
+            {
+                currentSteps[i] = &(currentSong->getTrack(i).getPatternFromOrderNumber(orderNum).getStep(stepNum));
+            }
+            for (int i = 0; i < 3; i++) //FM3op1-3
+            {
+                currentSteps[i+16] = &(currentSong->getTrack(i+2).getPatternFromOrderNumber(orderNum).getStep(stepNum));
+            }
+            currentSteps[2] = &(currentSong->getTrack(5).getPatternFromOrderNumber(orderNum).getStep(stepNum)); //FM3op4
+            for (int i = 0; i < 13; i++) //The rest of the channels
+            {
+                currentSteps[i+3] = &(currentSong->getTrack(i+6).getPatternFromOrderNumber(orderNum).getStep(stepNum));
+            }
+        }
     }
     timeToNextTick -= delta;
+    if (chNum == 19)
+    {
+        for (int i = 0; i < 2; i++) //FM1-2
+        {
+            int outInd = i;
+            int inInd = i;
+            int retNote = chipController->getFMLatestNote(inInd).getNoteNumber();
+            int stepNote = currentSteps[outInd]->getNoteNumber();
+            int retrigmask = GetRetriggerMask(retNote, (currentNotes[outInd] & 0x7F), currentSteps[outInd]->getNoteNumber(), outInd);
+            if (chipController->isKeyOnFM(inInd)) currentNotes[outInd] = retNote | retrigmask;
+            else currentNotes[outInd] = -1;
+        }
+        for (int i = 0; i < 2; i++) //FM3op2-3
+        {
+            int outInd = i+17;
+            int inInd = i+6;
+            int retNote = chipController->getFMLatestNote(inInd).getNoteNumber();
+            int stepNote = currentSteps[outInd]->getNoteNumber();
+            int retrigmask = GetRetriggerMask(retNote, (currentNotes[outInd] & 0x7F), currentSteps[outInd]->getNoteNumber(), outInd);
+            if (chipController->isKeyOnFM(inInd)) currentNotes[outInd] = retNote | retrigmask;
+            else currentNotes[outInd] = -1;
+        }
+        { //FM3op1
+            int outInd = 16;
+            int inInd = 2;
+            int retNote = chipController->getFMLatestNote(inInd).getNoteNumber();
+            int stepNote = currentSteps[outInd]->getNoteNumber();
+            int retrigmask = GetRetriggerMask(retNote, (currentNotes[outInd] & 0x7F), currentSteps[outInd]->getNoteNumber(), outInd);
+            if (chipController->isKeyOnFM(inInd)) currentNotes[outInd] = retNote | retrigmask;
+            else currentNotes[outInd] = -1;
+        }
+        { //FM3op4
+            int outInd = 2;
+            int inInd = 8;
+            int retNote = chipController->getFMLatestNote(inInd).getNoteNumber();
+            int stepNote = currentSteps[outInd]->getNoteNumber();
+            int retrigmask = GetRetriggerMask(retNote, (currentNotes[outInd] & 0x7F), currentSteps[outInd]->getNoteNumber(), outInd);
+            if (chipController->isKeyOnFM(inInd)) currentNotes[outInd] = retNote | retrigmask;
+            else currentNotes[outInd] = -1;
+        }
+        for (int i = 0; i < 3; i++) //FM4-6
+        {
+            int outInd = i+3;
+            int inInd = i+3;
+            int retNote = chipController->getFMLatestNote(inInd).getNoteNumber();
+            int stepNote = currentSteps[outInd]->getNoteNumber();
+            int retrigmask = GetRetriggerMask(retNote, (currentNotes[outInd] & 0x7F), currentSteps[outInd]->getNoteNumber(), outInd);
+            if (chipController->isKeyOnFM(inInd)) currentNotes[outInd] = retNote | retrigmask;
+            else currentNotes[outInd] = -1;
+        }
+    }
+    else if (chNum == 16)
+    {
+        for (int i = 0; i < 6; i++) //FM1-6
+        {
+            int outInd = i;
+            int inInd = i;
+            int retNote = chipController->getFMLatestNote(inInd).getNoteNumber();
+            int stepNote = currentSteps[outInd]->getNoteNumber();
+            int retrigmask = GetRetriggerMask(retNote, (currentNotes[outInd] & 0x7F), currentSteps[outInd]->getNoteNumber(), outInd);
+            if (chipController->isKeyOnFM(inInd)) currentNotes[outInd] = retNote | retrigmask;
+            else currentNotes[outInd] = -1;
+        }
+    }
+    for (int i = 0; i < 3; i++) //SSG1-3
+    {
+        int outInd = i+6;
+        int inInd = i;
+        int retNote = chipController->getSSGLatestNote(inInd).getNoteNumber();
+        int stepNote = currentSteps[outInd]->getNoteNumber();
+        int retrigmask = GetRetriggerMask(retNote, (currentNotes[outInd] & 0x7F), currentSteps[outInd]->getNoteNumber(), outInd);
+        if (chipController->isKeyOnSSG(inInd)) currentNotes[outInd] = retNote | retrigmask;
+        else currentNotes[outInd] = -1;
+    }
+    for (int i = 0; i < 6; i++) //Rhythm
+    {
+        int outInd = i+9;
+        int inInd = i;
+        int stepNote = currentSteps[outInd]->getNoteNumber();
+        if (currentNotes[outInd] == -1)
+        {
+            if (stepNote != Step::NoteValue::NOTE_NONE && stepNote != Step::NoteValue::NOTE_KEY_OFF && stepNote != Step::NoteValue::NOTE_KEY_CUT) currentNotes[outInd] = 48; //Note doesn't matter for rhythm channels
+            else currentNotes[outInd] = -1;
+            retriggeredNotes[outInd] = false;
+        }
+        else
+        {
+            if (stepNote == Step::NoteValue::NOTE_KEY_OFF && stepNote == Step::NoteValue::NOTE_KEY_CUT) currentNotes[outInd] = -1;
+            else if (stepNote == Step::NoteValue::NOTE_NONE)
+            {
+                currentNotes[outInd] = 48; //Note doesn't matter for rhythm channels
+                retriggeredNotes[outInd] = false;
+            }
+            else if (!retriggeredNotes[outInd])
+            {
+                currentNotes[outInd] = 48 | 0x80;
+                retriggeredNotes[outInd] = true;
+            }
+            else currentNotes[outInd] = 48; //Note doesn't matter for rhythm channels
+        }
+    }
+    { //ADPCM
+        int outInd = 15;
+        int retNote = chipController->getADPCMLatestNote().getNoteNumber();
+        int stepNote = currentSteps[outInd]->getNoteNumber();
+        int retrigmask = GetRetriggerMask(retNote, (currentNotes[outInd] & 0x7F), currentSteps[outInd]->getNoteNumber(), outInd);
+        if (chipController->isKeyOnADPCM()) currentNotes[outInd] = retNote | retrigmask;
+        else currentNotes[outInd] = -1;
+    }
 }
 
 void BambooTrackerPlayer::_ready()
@@ -120,6 +287,26 @@ void BambooTrackerPlayer::setSongNumber(int64_t num)
 int64_t BambooTrackerPlayer::getSongNumber() const
 {
     return currentSongNum;
+}
+
+void BambooTrackerPlayer::setOrderNumber(int64_t num)
+{
+    orderNum = num; //Not effective
+}
+
+int64_t BambooTrackerPlayer::getOrderNumber() const
+{
+    return orderNum;
+}
+
+void BambooTrackerPlayer::setStepNumber(int64_t num)
+{
+    stepNum = num; //Not effective
+}
+
+int64_t BambooTrackerPlayer::getStepNumber() const
+{
+    return stepNum;
 }
 
 void BambooTrackerPlayer::PlayNewModule()
@@ -154,7 +341,7 @@ void BambooTrackerPlayer::PlayNewModule()
 
 void BambooTrackerPlayer::PlaySong(int64_t songNum, bool forceRestart)
 {
-    if (songNum >= module->getNumberOfSongs() || songNum < 0)
+    if (songNum < 0 || songNum >= module->getNumberOfSongs())
     {
         return; //Do not attempt to play an out-of-range song
     }
@@ -174,12 +361,14 @@ void BambooTrackerPlayer::PlaySong(int64_t songNum, bool forceRestart)
     tickCounter->setGrooveState(song.isUsedTempo() ? GrooveState::Invalid : GrooveState::ValidByGlobal);
     currentSong = &song;
     currentSongType = currentSong->getStyle().type;
-    if (currentSongType == SongType::Standard) chNum = 15;
-    else if (currentSongType == SongType::FM3chExpanded) chNum = 18;
+    if (currentSongType == SongType::Standard) chNum = 16;
+    else if (currentSongType == SongType::FM3chExpanded) chNum = 19;
     pbManager->startPlayFromStart();
     isSongPlaying = true;
     timeToNextTick = -0.05;
     numSampRemainder = 0.0;
+    orderNum = 0;
+    stepNum = 0;
     play();
     playback = get_stream_playback();
 }
@@ -198,4 +387,15 @@ void BambooTrackerPlayer::StopSong()
     isSongPlaying = false;
     currentSongNum = -1;
     stop();
+}
+
+int64_t BambooTrackerPlayer::GetRegister(int64_t addr)
+{
+    return chipController->getRegisterDebug((int)addr);
+}
+
+int64_t BambooTrackerPlayer::GetNote(int64_t channel)
+{
+    if (channel < 0 || channel >= chNum) return -1; //Out of range -> no note playing
+    else return currentNotes[channel];
 }

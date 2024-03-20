@@ -200,6 +200,12 @@ uint8_t OPNA::getRegister(uint32_t offset) const
 	return intf_->readData();
 }
 
+//MH - Included this function to allow BambooTrackerPlayer to read OPNA registers for fun
+uint8_t OPNA::getRegisterDebug(uint32_t offset) const
+{
+	return intf_->readDataDebug(offset);
+}
+
 void OPNA::setVolumeFM(double dB)
 {
 	std::lock_guard<std::mutex> lg(mutex_);

@@ -19,5 +19,7 @@ public:
 	virtual uint8_t readData() = 0;
 	virtual void updateStream(sample** outputs, int nSamples) = 0;
 	virtual void updateSsgStream(sample** outputs, int nSamples) = 0;
+	//MH - Included this function to allow BambooTrackerPlayer to read OPNA registers for fun
+	virtual uint8_t readDataDebug(uint32_t address) = 0;
 };
 }

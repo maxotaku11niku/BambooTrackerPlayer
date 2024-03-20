@@ -149,6 +149,12 @@ void OPNAController::sendRegister(int address, int value)
 	registerDirectSetBuf_.push_back({ static_cast<uint32_t>(address), static_cast<uint8_t>(value) });
 }
 
+//MH - Included this function to allow BambooTrackerPlayer to read OPNA registers for fun
+int OPNAController::getRegisterDebug(int address)
+{
+	return opna_->getRegisterDebug((uint32_t)address);
+}
+
 /********** DRAM **********/
 size_t OPNAController::getDRAMSize() const
 {

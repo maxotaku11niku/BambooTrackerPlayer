@@ -47,6 +47,8 @@ public:
 	uint8_t readData() override;
 	void updateStream(sample** outputs, int nSamples) override;
 	void updateSsgStream(sample** outputs, int nSamples) override;
+	//MH - Included this function to allow BambooTrackerPlayer to read OPNA registers for fun
+	uint8_t readDataDebug(uint32_t address) override;
 
 private:
 	class YmfmInterface final : public ymfm::ymfm_interface

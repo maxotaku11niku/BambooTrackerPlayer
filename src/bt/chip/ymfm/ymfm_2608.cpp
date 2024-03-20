@@ -133,4 +133,10 @@ void Ymfm2608::updateSsgStream(sample** outputs, int nSamples)
 		*bufr++ = s;
 	}
 }
+
+//MH - Included this function to allow BambooTrackerPlayer to read OPNA registers for fun
+uint8_t Ymfm2608::readDataDebug(uint32_t address)
+{
+	return ymfm_->read_debug(address);
+}
 }

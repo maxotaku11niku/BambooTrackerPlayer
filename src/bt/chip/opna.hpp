@@ -59,6 +59,9 @@ public:
 	void setForcedWriteMode(bool enabled) noexcept { isForcedRegWrite_ = enabled; }
 	void setRegister(uint32_t offset, uint8_t value) override;
 	uint8_t getRegister(uint32_t offset) const override;
+	//MH - Included this function to allow BambooTrackerPlayer to read OPNA registers for fun
+	uint8_t getRegisterDebug(uint32_t offset) const;
+
 	void setVolumeFM(double dB);
 	double getVolumeFM() const noexcept { return volumeFm_; }
 	void setVolumeSSG(double dB);

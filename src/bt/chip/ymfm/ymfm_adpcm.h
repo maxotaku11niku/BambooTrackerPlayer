@@ -92,6 +92,8 @@ public:
 
 	// direct read/write access
 	void write(uint32_t index, uint8_t data) { m_regdata[index] = data; }
+	//MH - Included this function to allow BambooTrackerPlayer to read OPNA registers for fun
+	uint8_t read(uint32_t index) { return m_regdata[index]; }
 
 	// system-wide registers
 	uint32_t dump() const                               { return bitfield(m_regdata[0x00], 7); }
@@ -264,6 +266,8 @@ public:
 
 	// direct read/write access
 	void write(uint32_t index, uint8_t data) { m_regdata[index] = data; }
+	//MH - Included this function to allow BambooTrackerPlayer to read OPNA registers for fun
+	uint8_t read(uint32_t index) { return m_regdata[index]; }
 
 	// system-wide registers
 	uint32_t execute() const          { return bitfield(m_regdata[0x00], 7); }
