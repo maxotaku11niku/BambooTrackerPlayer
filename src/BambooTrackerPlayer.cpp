@@ -134,6 +134,10 @@ void BambooTrackerPlayer::_process(double delta)
             {
                 currentSteps[i] = &(currentSong->getTrack(i).getPatternFromOrderNumber(orderNum).getStep(stepNum));
             }
+            for (int i = 0; i < 3; i++) //Copy FM3op4 into FM3op1-3
+            {
+                currentSteps[i+16] = currentSteps[2];
+            }
         }
         else if (chNum == 19)
         {
@@ -215,6 +219,10 @@ void BambooTrackerPlayer::_process(double delta)
             int retrigmask = GetRetriggerMask(retNote, (currentNotes[outInd] & 0x7F), currentSteps[outInd]->getNoteNumber(), outInd);
             if (chipController->isKeyOnFM(inInd)) currentNotes[outInd] = retNote | retrigmask;
             else currentNotes[outInd] = -1;
+        }
+        for (int i = 0; i < 3; i++) //Copy FM3op4 into FM3op1-3
+        {
+            currentNotes[i+16] = currentNotes[2];
         }
     }
     for (int i = 0; i < 3; i++) //SSG1-3
@@ -396,6 +404,6 @@ int64_t BambooTrackerPlayer::GetRegister(int64_t addr)
 
 int64_t BambooTrackerPlayer::GetNote(int64_t channel)
 {
-    if (channel < 0 || channel >= chNum) return -1; //Out of range -> no note playing
+    if (channel < 0 || channel > 18) return -1; //Out of range -> no note playing
     else return currentNotes[channel];
 }
