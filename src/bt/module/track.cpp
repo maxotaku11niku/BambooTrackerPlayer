@@ -175,6 +175,21 @@ void Track::registerPatternToOrder(int order, int pattern)
 	order_.at(static_cast<size_t>(order)) = pattern;
 }
 
+// MH - Added to facilitate the initial adding of patterns to in-memory module data, avoids a crash due to out-of-bounds access
+void Track::registerPatternToOrderWithFallback(int order, int pattern, int patSize)
+{
+	if (pattern >= patterns_.size()) //Pattern out of range
+	{
+		size_t oldSize = patterns_.size();
+		patterns_.reserve(pattern+1);
+		for (int i = oldSize; i < pattern+1; ++i)
+		{
+			patterns_.emplace_back(i, patSize);
+		}
+	}
+	registerPatternToOrder(order, pattern);
+}
+
 void Track::insertOrderBelow(int order)
 {
 	int n = searchFirstUneditedUnusedPattern();

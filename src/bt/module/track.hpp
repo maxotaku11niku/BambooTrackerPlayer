@@ -66,6 +66,7 @@ public:
 	void prelimExpandPatternList(int newSize, int patSize); // MH - Added to facilitate the initial adding of patterns to in-memory module data, avoids a crash due to out-of-bounds access
 	void shrinkPatternList(); // MH - Added to facilitate the initial adding of patterns to in-memory module data, cleans up any unused patterns
 	void registerPatternToOrder(int order, int pattern);
+	void registerPatternToOrderWithFallback(int order, int pattern, int patSize); // MH - Added to facilitate the initial adding of patterns to in-memory module data, avoids a crash due to out-of-bounds access
 	void insertOrderBelow(int order);
 	void deleteOrder(int order);
 	void swapOrder(int a, int b);

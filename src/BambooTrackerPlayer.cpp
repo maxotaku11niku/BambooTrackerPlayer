@@ -109,12 +109,29 @@ void BambooTrackerPlayer::_process(double delta)
         }
         numSampRemainder = fltNumSamp - (double)(numSamples);
         ticksToNextStep = pbManager->streamCountUp();
+        if (pbManager->getPlayingOrderNumber() < 0 || pbManager->getPlayingStepNumber() < 0) ticksToNextStep = -1; //Hack
         if (ticksToNextStep == 0)
         {
-            for (int i = 0; i < chNum; i++)
+            for (int i = 0; i < 19; i++)
             {
                 retriggeredNotes[i] = false;
             }
+        }
+        else if (ticksToNextStep < 0)
+        {
+            orderNum = 0;
+            stepNum = 0;
+            for (int i = 0; i < 19; i++)
+            {
+                currentSteps[i] = 0;
+                currentNotes[i] = -1;
+                retriggeredNotes[i] = false;
+            }
+
+            isSongPlaying = false;
+            currentSongNum = -1;
+            stop();
+            return;
         }
         bool success = chipController->getStreamSamples(sampleBuffer, numSamples);
         outSampleBuffer.resize(numSamples);
@@ -392,6 +409,16 @@ void BambooTrackerPlayer::PlaySongFromName(String songName, bool forceRestart)
 void BambooTrackerPlayer::StopSong()
 {
     pbManager->stopPlaySong();
+
+    orderNum = 0;
+    stepNum = 0;
+    for (int i = 0; i < 19; i++)
+    {
+        currentSteps[i] = 0;
+        currentNotes[i] = -1;
+        retriggeredNotes[i] = false;
+    }
+
     isSongPlaying = false;
     currentSongNum = -1;
     stop();

@@ -1674,10 +1674,10 @@ size_t loadSongSection(std::weak_ptr<Module> mod, const BinaryContainer& ctr,
 			track.prelimExpandPatternList(odrLen, ptnSize); // MH - Added to facilitate the initial adding of patterns to in-memory module data, avoids a crash due to out-of-bounds access
 			for (uint8_t oi = 0; oi < odrLen; ++oi) {
 				if (!oi)
-					track.registerPatternToOrder(oi, ctr.readUint8(tcsr++));
+					track.registerPatternToOrderWithFallback(oi, ctr.readUint8(tcsr++), ptnSize); // MH - Added to facilitate the initial adding of patterns to in-memory module data, avoids a crash due to out-of-bounds access
 				else {
 					track.insertOrderBelow(oi - 1);
-					track.registerPatternToOrder(oi, ctr.readUint8(tcsr++));
+					track.registerPatternToOrderWithFallback(oi, ctr.readUint8(tcsr++), ptnSize); // MH - Added to facilitate the initial adding of patterns to in-memory module data, avoids a crash due to out-of-bounds access
 				}
 			}
 			if (version >= Version::toBCD(1, 2, 1)) {
